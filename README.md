@@ -1,5 +1,9 @@
 # Генератор git історії для законів України
 
+Ідея даного репозиторію не нова і полягає в використанні Git для відстежування змін в законодавчих та інших правових документах України.
+Html документи перетворюються в формат Markdown для покращення можливості перегляду безпосереднього тексту документів, а також збереження посилань та базового форматування.
+
+# Приблизний алгоритм генератора
 1. Для обраного документа, завантажити список його попередніх версій, а також поточну з сайта [zakon.rada.gov.ua](https://zakon.rada.gov.ua/);
 2. Для кожної версії:
 	1. Завантажити `html` текст документа;
@@ -17,10 +21,31 @@
 # Приклад створеної git історії
 * [ukrainian-laws-in-time](https://github.com/skivol/ukrainian-laws-in-time)
 
+# Версія Node JS
+v17.4.0
+
+# Рекомендоване налаштування Git
+* Для відображення українських слів в назвах файлів: `git config --global core.quotePath false` [джерело](https://stackoverflow.com/a/34549249)
+* Версія 2.30+ (спосіб фільтрувати незначні зміни (наприклад, посилання) - [stackoverflow](https://stackoverflow.com/a/64758633))
+* Завжди використовувати "pager" (наприклад, для "delta", - `git config --global core.pager 'delta --paging always'`):
+
 # Бібліотеки
 1. node-fetch
 2. cheerio
 3. turndown
+
+# Корисні інструменти
+1. Перегляд markdown документів з командного рядка - https://github.com/charmbracelet/glow
+2. Перегляд змін у документах - https://github.com/dandavison/delta
+
+# Фільтрування неважливих змін при перегляді
+`git diff -I"https" $document`
+
+# TODO
+* e2e тести
+
+# Інші назви
+Генератор для Законов Украины во времени; Ukrainian Laws in Time Generator
 
 # Ліцензія
 [![Ліцензія Creative Commons](https://i.creativecommons.org/l/by/4.0/88x31.png)](http://creativecommons.org/licenses/by/4.0/)  

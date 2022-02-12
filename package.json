@@ -1,0 +1,31 @@
+{
+  "name": "ukrainian-laws-in-time",
+  "version": "1.0.0",
+  "description": "Ukrainian laws in time tracked with the help of Git",
+  "type": "module",
+  "main": "html-to-md.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skivol/ukrainian-laws-in-time.git"
+  },
+  "keywords": [
+    "ukrainian",
+    "laws",
+    "legislation",
+    "time"
+  ],
+  "author": "Ivan Skachkov",
+  "license": "CC-BY-4.0",
+  "bugs": {
+    "url": "https://github.com/skivol/ukrainian-laws-in-time/issues"
+  },
+  "homepage": "https://github.com/skivol/ukrainian-laws-in-time#readme",
+  "dependencies": {
+    "cheerio": "1.0.0-rc.10",
+    "node-fetch": "3.2.0",
+    "turndown": "7.1.1"
+  }
+}
