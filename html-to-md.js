@@ -3,7 +3,6 @@ import * as util from 'util';
 import { exec } from 'child_process';
 import TurndownService from 'turndown';
 import fetch from 'node-fetch';
-import cheerio from 'cheerio';
 
 const args = process.argv.slice(2)
 
@@ -13,37 +12,20 @@ const targetFileRelative = args[2];
 const targetFile = `${targetRepository}/${targetFileRelative}`;
 const lastProcessedEdition = args[3]; // for example, "ed20021105" or could be empty to start from the very beginning
 
-const baseUrl = "https://zakon.rada.gov.ua/laws/show";
-const documentFrame = (url) => `${url}.frame`;
-const documentUrl = () => `${baseUrl}/${documentId}`;
+const editionSuffix = e => e ? `/${e}` : '';
+// https://data.rada.gov.ua/open/main/api/page3
+const baseUrl = e => `https://data.rada.gov.ua/laws/show/${documentId}${editionSuffix(e)}`;
+const cardUrl = e => `https://data.rada.gov.ua/laws/card/${documentId}.json${editionSuffix(e)}`;
 
-const previousEditionColor = 'color:#666666';
-const currentEditionColor = 'color:#0c628d';
-const futureEditionColor = 'color:#CC0000';
-const editionSelector = (editionColor) => `span#edition select option[style*="${editionColor}"]`;
-
-const cheerioDocument = async (documentContentUrl) => {
-	const response = await fetch(documentContentUrl);
-	const documentContent = await response.text();
-	return cheerio.load(documentContent);
+const cardContent = async e => {
+	const response = await fetch(cardUrl(e));
+	return await response.json();
 };
+const editionsToProcess = async () => {
+	const { eds_dates } = await cardContent();
+	const currentEditionIndex = Object.values(eds_dates).indexOf(0);
+	const editionsUpToNow = Object.keys(eds_dates).slice(0, currentEditionIndex + 1).map(k => `ed${k}`);
 
-const documentName = ($) => $('h1').text();
-const documentIdEditionAndBasisForChange = ($) => {
-	const subtitle = $($('div.box.alert.text-center div div')[0])
-		// retrieve concatenated text
-		.text()
-		// remove newline
-		.replace(/[\n\r]+/g, ' ')
-		// remove irrelevant (in long-term) information
-		.replace(/( чинний,)? (поточна|попередня) редакція —/g, '');
-	return subtitle;
-};
-
-const editionsToProcess = ($) => {
-	const previousEditions = $(editionSelector(previousEditionColor)).toArray();
-	const currentEdition = ($(editionSelector(currentEditionColor)).toArray())[0];
-	const editionsUpToNow = [...previousEditions, currentEdition];
 	// filter out irrelevant editions if needed
 	const lastProcessedEditionIndex = lastProcessedEdition ? editionsUpToNow.findIndex(
 		e => e.attribs.value.includes(lastProcessedEdition)
@@ -55,8 +37,9 @@ const editionsToProcess = ($) => {
 		throw new Error(`${lastProcessedEdition} редакція є останньою для ${documentId} документа`);
 	}
 	const thereIsSomethingToSkip = lastProcessedEditionIndex !== -1;
-	const relevantEditionsUrls = (thereIsSomethingToSkip ? editionsUpToNow.slice(lastProcessedEditionIndex + 1) : editionsUpToNow).map(e => e.attribs.value);
-	return relevantEditionsUrls;
+	const editionUrl = e => baseUrl(e);
+	const relevantEditions = (thereIsSomethingToSkip ? editionsUpToNow.slice(lastProcessedEditionIndex + 1) : editionsUpToNow);
+	return relevantEditions;
 };
 
 const readWriteOptions = { encoding: 'utf-8' };
@@ -65,17 +48,12 @@ const writeFile = async (targetFile, content) => {
 };
 
 const downloadConvertAndUpdateDocument = async (e) => {
-	console.log(`Завантажуємо та перетворюємо ${e} документ`);
+	const editionUrl = baseUrl(e);
+	console.log(`Завантажуємо та перетворюємо ${editionUrl} документ`);
 
 	// download
-	const $ = await cheerioDocument(documentFrame(e));
-	// extract
-	const contentSelector = 'div#article';
-	const content = $.html($(contentSelector)); // content of whole "content" tag (https://stackoverflow.com/a/43365200)
-	if (!content || content.length < 100) {
-		console.log(`Вміст документа: "${content}"`);
-		throw new Error(`Вміст не знайдено в '${contentSelector}' селекторі ${e} документа`);
-	}
+	const response = await fetch(editionUrl);
+	const content = await response.text();
 	// convert
 	const md = new TurndownService().turndown(content);
 
@@ -98,17 +76,16 @@ const downloadConvertAndUpdateDocument = async (e) => {
 
 const fileExists = async (file) => await fs.promises.access(file, fs.constants.F_OK).then(() => true).catch(() => false);
 const commitMessageFile = "/tmp/commitMessage.txt";
-const prepareCommitMessage = async (e) => {
+const prepareCommitMessage = async (edition) => {
 	// console.log(`Готуємо повідомлення для git в файлі ${commitMessageFile}`);
-
-	const $ = await cheerioDocument(e);
-	const name = documentName($);
-	const idEditionAndBasisForChange = documentIdEditionAndBasisForChange($);
+	const { nazva, nreg, datred, pidstava } = await cardContent(edition);
+	const date = d => `${d.slice(6)}.${d.slice(4,6)}.${d.slice(0,4)}`; // DD.MM.YYYY
+	const idEditionAndBasisForChange = `Документ ${nreg}, Редакція від ${date(datred.toString())}${pidstava && pidstava.length ? `, підстава - ${pidstava}` : ''}`;
 	const targetFileExists = await fileExists(targetFile);
 	const action = targetFileExists ? `Оновлює` : `Додає`;
-	const message = `${action} "${name}" (${idEditionAndBasisForChange})
+	const message = `${action} "${nazva}" (${idEditionAndBasisForChange})
 
-Джерело: ${e}
+Джерело: ${baseUrl(edition)}
 `;
 	await writeFile(commitMessageFile, message);
 };
@@ -129,30 +106,31 @@ const performCommit = async () => {
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
 
-const handleEdition = async (editionUrl, i, total) => { // "editionUrl" is like "https://zakon.rada.gov.ua/laws/show/80731-10/ed20150304"
+const handleEdition = async (edition, i, total) => { // "edition" is like "ed20150304"
 	console.log("");
-	console.log(`Опрацьовуємо документ ${documentId}, видання №${i + 1} з ${total} (нумерація відносна) (${editionUrl})`);
+	console.log(`Опрацьовуємо документ ${documentId}, видання №${i + 1} з ${total} (нумерація відносна) (${edition})`);
 
-	await prepareCommitMessage(editionUrl); // if would go after convertion, "action" variable would need to be calculated beforehand
-	await downloadConvertAndUpdateDocument(editionUrl);
+	await prepareCommitMessage(edition); // if would go after convertion, "action" variable would need to be calculated beforehand
+	await downloadConvertAndUpdateDocument(edition);
 	await performCommit();
 
 	// conversion itself takes 2-5 seconds so there's anyway delay
-	// console.log("Відпочиваємо трохи (щоб не перевантажувати запитами сайт zakon.rada.gov.ua)");
-	// await delay(1000);
+	// 5 to 104 seconds additional delay
+	const randomSeconds = 5 + Math.random()*100;
+	console.log(`Відпочиваємо ${randomSeconds} секунд (щоб не перевантажувати запитами data.rada.gov.ua)`);
+	await delay(1000 * randomSeconds);
 };
 
 if (lastProcessedEdition && lastProcessedEdition.length > 0) {
 	console.log(`Починаємо перетворення з ${lastProcessedEdition} редакції`);
 }
 
-const $content = await cheerioDocument(documentFrame(documentUrl()));
-const editionUrls = editionsToProcess($content);
+const relevantEditions = await editionsToProcess();
 
 // "array.forEach" doesn't wait for async completion, thus would not properly work
-// editionUrls.forEach(handleEdition);
+// relevantEditions.forEach(handleEdition);
 
-for (let i = 0; i < editionUrls.length; i++) {
-	await handleEdition(editionUrls[i], i, editionUrls.length);
+for (let i = 0; i < relevantEditions.length; i++) {
+	await handleEdition(relevantEditions[i], i, relevantEditions.length);
 }
 

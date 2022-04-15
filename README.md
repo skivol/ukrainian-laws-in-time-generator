@@ -29,6 +29,16 @@ v17.4.0
 * Версія 2.30+ (спосіб фільтрувати незначні зміни (наприклад, посилання) - [stackoverflow](https://stackoverflow.com/a/64758633))
 * Завжди використовувати "pager" (наприклад, для "delta", - `git config --global core.pager 'delta --paging always'`):
 
+# Налаштування delta
+Варто звернути увагу на `max-line-length` та `wrap-max-lines`, наприклад:
+```
+[delta]
+    features = side-by-side line-numbers decorations
+    whitespace-error-style = 22 reverse
+    max-line-length = 0
+    wrap-max-lines = unlimited
+```
+
 # Бібліотеки
 1. node-fetch
 2. cheerio
