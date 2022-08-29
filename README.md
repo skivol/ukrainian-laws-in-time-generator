@@ -39,17 +39,15 @@ v17.4.0
     wrap-max-lines = unlimited
 ```
 
-# Бібліотеки
+# Залежності
+## Бібліотеки
 1. node-fetch
-2. cheerio
-3. turndown
+## Програми
+1. [pandoc](https://pandoc.org/) - для перетворення html в pandoc markdown.
 
 # Корисні інструменти
 1. Перегляд markdown документів з командного рядка - https://github.com/charmbracelet/glow
 2. Перегляд змін у документах - https://github.com/dandavison/delta
-
-# Фільтрування неважливих змін при перегляді
-`git diff -I"https" $document`
 
 # TODO
 * e2e тести
